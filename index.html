@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bookvask.no</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0F172A">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 0; background: #f6f7fb; color: #111; }
+    header { padding: 18px 16px; background: white; border-bottom: 1px solid #e7e7ee; }
+    header h1 { margin: 0; font-size: 18px; }
+    main { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; grid-template-columns: 1.15fr 0.85fr; }
+    @media (max-width: 900px){ main { grid-template-columns: 1fr; } }
+    .card { background: white; border: 1px solid #e7e7ee; border-radius: 14px; padding: 14px; box-shadow: 0 1px 0 rgba(0,0,0,0.02); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    label { font-size: 12px; color: #444; display: grid; gap: 6px; }
+    input, select, button { font: inherit; }
+    input, select { padding: 10px; border: 1px solid #d9d9e6; border-radius: 10px; background: #fff; min-width: 180px; }
+    button { padding: 10px 12px; border: 0; border-radius: 10px; background: #111; color: white; cursor: pointer; }
+    button.secondary { background: #ececf6; color: #111; border: 1px solid #d9d9e6; }
+    button.danger { background: #b00020; }
+    .slots { display: grid; gap: 8px; margin-top: 10px; }
+    .slot { display:flex; justify-content:space-between; align-items:center; padding: 10px; border: 1px solid #e7e7ee; border-radius: 12px; }
+    .slot.free { background: #f7fffb; }
+    .slot.booked { background: #fff7f7; }
+    .muted { color: #666; font-size: 12px; }
+    .pill { font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1px solid #e7e7ee; }
+    .msg { margin-top: 10px; font-size: 13px; }
+    .msg.ok { color: #0b6b2f; }
+    .msg.err { color: #b00020; }
+    .hr { height: 1px; background: #e7e7ee; margin: 12px 0; }
+    .rules ul { margin: 8px 0 0 18px; padding: 0; }
+    .check { display:flex; gap:10px; align-items:flex-start; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧺 Bookvask.no</h1>
+    <div class="muted">Faste tider: 06–10, 10–14, 14–18, 18–22. Maks 1 aktiv booking per leilighet.</div>
+    <div class="muted">Booking for samme dag stenger kl. 18:00.</div>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="row">
+        <label>Vaskeri
+          <select id="room"></select>
+        </label>
+        <label>Dato
+          <input id="date" type="date" />
+        </label>
+        <button id="refresh" class="secondary">Oppdater</button>
+      </div>
+
+      <div class="slots" id="slots"></div>
+      <div id="status" class="msg"></div>
+
+      <div class="hr"></div>
+
+      <div class="rules">
+        <strong>Regler for bruk av vaskeri</strong>
+        <ul id="rulesList"></ul>
+      </div>
+    </section>
+
+    <aside class="card">
+      <h2 style="margin:0 0 8px 0; font-size:16px;">Book valgt tid</h2>
+      <div class="muted">Klikk på en ledig tid til venstre og fyll inn.</div>
+
+      <div style="height:10px"></div>
+
+      <div class="row">
+        <label>Valgt tid
+          <input id="chosen" type="text" readonly />
+        </label>
+      </div>
+
+      <div class="row">
+        <label>Navn
+          <input id="name" placeholder="Fornavn Etternavn" />
+        </label>
+        <label>Leilighetsnr
+          <input id="apartment" placeholder="f.eks. 1202" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label>Telefon (valgfritt)
+          <input id="phone" placeholder="f.eks. 90000000" />
+        </label>
+        <label>Kode (for Mine bookinger/avbestilling)
+          <input id="pin" placeholder="Velg en kode" />
+        </label>
+      </div>
+
+      <div class="check">
+        <input id="acceptRules" type="checkbox" />
+        <label for="acceptRules" style="font-size:12px; color:#444;">
+          Jeg har lest reglene og godtar å følge dem.
+        </label>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="book">Book</button>
+        <button id="clear" class="secondary">Nullstill</button>
+      </div>
+
+      <div id="bookMsg" class="msg"></div>
+
+      <div class="hr"></div>
+
+      <h2 style="margin:0 0 8px 0; font-size:16px;">Mine bookinger</h2>
+      <div class="row">
+        <label>Kode
+          <input id="pinLookup" placeholder="Din kode" />
+        </label>
+        <button id="loadMine" class="secondary">Vis</button>
+      </div>
+
+      <div id="mine" class="slots"></div>
+      <div id="mineMsg" class="msg"></div>
+    </aside>
+  </main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  let CONFIG = null;
+  let selectedSlot = null;
+
+  function fmtLocal(iso) {
+    const d = new Date(iso);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+  function fmtLocalDate(iso) {
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function setMsg(el, text, kind) {
+    el.className = "msg " + (kind || "");
+    el.textContent = text || "";
+  }
+
+  async function api(path, opts) {
+    const res = await fetch(path, opts);
+    const isJson = res.headers.get("content-type")?.includes("application/json");
+    const data = isJson ? await res.json() : await res.text();
+    if (!res.ok) {
+      const msg = (data && data.error) ? data.error : "Noe gikk galt";
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  async function loadConfig() {
+    CONFIG = await api("/api/config");
+    $("room").innerHTML = "";
+    for (const r of CONFIG.rooms) {
+      const opt = document.createElement("option");
+      opt.value = r;
+      opt.textContent = r;
+      $("room").appendChild(opt);
+    }
+
+    const rulesList = $("rulesList");
+    rulesList.innerHTML = "";
+    for (const rule of CONFIG.rules || []) {
+      const li = document.createElement("li");
+      li.textContent = rule;
+      rulesList.appendChild(li);
+    }
+  }
+
+  async function setDefaultDate() {
+    const t = await api("/api/today");
+    $("date").value = t.ymd;
+  }
+
+  function renderSlots(slots) {
+    const wrap = $("slots");
+    wrap.innerHTML = "";
+    selectedSlot = null;
+    $("chosen").value = "";
+
+    for (const s of slots) {
+      const div = document.createElement("div");
+      div.className = "slot " + (s.status === "free" ? "free" : "booked");
+
+      const left = document.createElement("div");
+      left.innerHTML = `
+        <div><strong>${fmtLocal(s.start_iso)}–${fmtLocal(s.end_iso)}</strong> <span class="pill">${s.status === "free" ? "Ledig" : "Booket"}</span></div>
+        <div class="muted">${s.room} • ${fmtLocalDate(s.start_iso)}</div>
+      `;
+
+      const right = document.createElement("div");
+      if (s.status === "free") {
+        const btn = document.createElement("button");
+        btn.className = "secondary";
+        btn.textContent = "Velg";
+        btn.onclick = () => {
+          selectedSlot = s;
+          $("chosen").value = `${$("room").value} ${$("date").value} ${fmtLocal(s.start_iso)}–${fmtLocal(s.end_iso)}`;
+          setMsg($("bookMsg"), "", "");
+        };
+        right.appendChild(btn);
+      } else {
+        // SKJUL NAVN: viser kun leilighetsnummer
+        const who = document.createElement("div");
+        who.className = "muted";
+        who.textContent = `Booket (leil. ${s.booking.apartment})`;
+        right.appendChild(who);
+      }
+
+      div.appendChild(left);
+      div.appendChild(right);
+      wrap.appendChild(div);
+    }
+  }
+
+  async function refreshSlots() {
+    setMsg($("status"), "Henter tider…", "");
+    const date = $("date").value;
+    const room = $("room").value;
+    const slots = await api(`/api/slots?date=${encodeURIComponent(date)}&room=${encodeURIComponent(room)}`);
+    renderSlots(slots);
+    setMsg($("status"), "", "");
+  }
+
+  async function doBook() {
+    if (!selectedSlot) return setMsg($("bookMsg"), "Velg en ledig tid først.", "err");
+    if (!$("acceptRules").checked) return setMsg($("bookMsg"), "Du må godta reglene før du kan booke.", "err");
+
+    const payload = {
+      room: $("room").value,
+      start_iso: selectedSlot.start_iso,
+      end_iso: selectedSlot.end_iso,
+      name: $("name").value,
+      apartment: $("apartment").value,
+      phone: $("phone").value,
+      pin: $("pin").value,
+      accepted_rules: true,
+    };
+
+    try {
+      setMsg($("bookMsg"), "Booker…", "");
+      await api("/api/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setMsg($("bookMsg"), "Ferdig! Tiden din er booket ✅", "ok");
+      await refreshSlots();
+    } catch (e) {
+      setMsg($("bookMsg"), e.message || "Kunne ikke booke", "err");
+    }
+  }
+
+  function clearForm() {
+    $("name").value = "";
+    $("apartment").value = "";
+    $("phone").value = "";
+    $("pin").value = "";
+    $("chosen").value = "";
+    $("acceptRules").checked = false;
+    selectedSlot = null;
+    setMsg($("bookMsg"), "", "");
+  }
+
+  async function loadMine() {
+    const pin = $("pinLookup").value.trim();
+    if (!pin) return setMsg($("mineMsg"), "Skriv inn koden først.", "err");
+
+    try {
+      setMsg($("mineMsg"), "Henter…", "");
+      const rows = await api(`/api/my-bookings?pin=${encodeURIComponent(pin)}`);
+      const wrap = $("mine");
+      wrap.innerHTML = "";
+      if (!rows.length) return setMsg($("mineMsg"), "Ingen bookinger funnet.", "");
+
+      setMsg($("mineMsg"), "", "");
+      for (const r of rows) {
+        const div = document.createElement("div");
+        div.className = "slot booked";
+        div.innerHTML = `
+          <div>
+            <div><strong>${r.laundry_room}</strong> <span class="pill">${fmtLocal(r.start_iso)}–${fmtLocal(r.end_iso)}</span></div>
+            <div class="muted">${fmtLocalDate(r.start_iso)} • leil. ${r.apartment}</div>
+          </div>
+        `;
+        const btn = document.createElement("button");
+        btn.className = "danger";
+        btn.textContent = "Avbestill";
+        btn.onclick = async () => {
+          try {
+            await api("/api/cancel", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: r.id, pin }),
+            });
+            await loadMine();
+            await refreshSlots();
+          } catch (e) {
+            setMsg($("mineMsg"), e.message || "Kunne ikke avbestille", "err");
+          }
+        };
+        const right = document.createElement("div");
+        right.appendChild(btn);
+        div.appendChild(right);
+        wrap.appendChild(div);
+      }
+    } catch (e) {
+      setMsg($("mineMsg"), e.message || "Kunne ikke hente", "err");
+    }
+  }
+
+  $("refresh").onclick = refreshSlots;
+  $("book").onclick = doBook;
+  $("clear").onclick = clearForm;
+  $("loadMine").onclick = loadMine;
+  $("room").onchange = refreshSlots;
+  $("date").onchange = refreshSlots;
+
+  (async function init() {
+    await loadConfig();
+    await setDefaultDate();
+    await refreshSlots();
+  })();
+</script>
+
+<!-- Service worker (PWA) -->
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js");
+  }
+</script>
+</body>
+</html>
